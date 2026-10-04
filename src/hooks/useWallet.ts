@@ -30,8 +30,8 @@ export function useWallet() {
           : connectAction.error ? 'error' : 'disconnected';
 
   const error = localError
-    ?? (connectAction.error ? String(connectAction.error.message ?? connectAction.error) : null)
-    ?? (disconnectAction.error ? String(disconnectAction.error.message ?? disconnectAction.error) : null);
+    ?? (connectAction.error ? String(connectAction.error) : null)
+    ?? (disconnectAction.error ? String(disconnectAction.error) : null);
 
   const connect = (walletName?: string) => {
     setLocalError(null);

@@ -392,7 +392,7 @@ function StepConnect({ wallet }: { wallet: ReturnType<typeof useWallet> }) {
 
         <div style={{ display: 'flex', gap: 10, marginTop: 22, flexWrap: 'wrap' }}>
           {!address ? (
-            <button className="btn btn-primary" onClick={connect} disabled={status === 'connecting'}>
+            <button className="btn btn-primary" onClick={() => connect()} disabled={status === 'connecting'}>
               {status === 'connecting' ? 'Connecting' : 'Connect Solana wallet'}
             </button>
           ) : (
