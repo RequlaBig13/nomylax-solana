@@ -89,7 +89,7 @@ export async function POST(req: Request) {
 
   const model =
     process.env.ANTHROPIC_MODEL ||
-    'claude-sonnet-4-20250514';
+    'claude-sonnet-5-5';
 
   let userMessage = parsed.data.message;
 
@@ -100,6 +100,25 @@ export async function POST(req: Request) {
   }
 
   try {
+    const body: Record<string, unknown> = {
+      model,
+      max_tokens: 1500,
+      system: SYSTEM,
+      messages: [
+        {
+          role: 'user',
+          content: userMessage,
+        },
+      ],
+    };
+
+    // Claude Sonnet 5.5 rejects non-default sampling parameters such as
+    // temperature=0.2. For this concise explanatory copilot, between_tools
+    // avoids unnecessary up-front thinking while keeping the model compatible.
+    if (model === 'claude-sonnet-5-5') {
+      body.thinking = { type: 'between_tools' };
+    }
+
     const response = await fetch(
       'https://api.anthropic.com/v1/messages',
       {
@@ -111,19 +130,7 @@ export async function POST(req: Request) {
           'anthropic-version': '2023-06-01',
         },
 
-        body: JSON.stringify({
-          model,
-          max_tokens: 700,
-          temperature: 0.2,
-          system: SYSTEM,
-
-          messages: [
-            {
-              role: 'user',
-              content: userMessage,
-            },
-          ],
-        }),
+        body: JSON.stringify(body),
 
         signal: AbortSignal.timeout(20_000),
       }
@@ -156,7 +163,8 @@ export async function POST(req: Request) {
       .map((item) => item.text)
       .join('\n')
       .trim();
-if (!answer) {
+
+    if (!answer) {
       return fail(
         502,
         'Control Copilot returned an empty response'
