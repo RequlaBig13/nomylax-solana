@@ -1,26 +1,36 @@
 import type { AgentAdapter } from './types';
 import type { IntentRequest } from '../types';
 
-/**
- * Talks to an external agent through our own server route.
- *
- * The adapter sends an agentId and nothing else. The destination URL lives in
- * server storage and is validated there, so a compromised browser cannot point
- * Nomylax credentials at a host of its choosing.
- */
 export class HttpAgentAdapter implements AgentAdapter {
   readonly kind = 'http' as const;
 
-  async nextIntents(agentId: string, count: number): Promise<Omit<IntentRequest, 'agentId'>[]> {
-    const res = await fetch('/api/agents/intents', {
+  constructor(private endpoint?: string) {}
+
+  async nextIntents(
+    agentId: string,
+    count: number,
+  ): Promise<Omit<IntentRequest, 'agentId'>[]> {
+    const isPreview = agentId === 'preview' && Boolean(this.endpoint);
+
+    const route = isPreview
+      ? '/api/agents/preview-intents'
+      : '/api/agents/intents';
+
+    const body = isPreview
+      ? { agentId, count, endpoint: this.endpoint }
+      : { agentId, count };
+
+    const res = await fetch(route, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentId, count }),
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error ?? `The agent gateway returned status ${res.status}`);
+      const data = await res.json().catch(() => ({}));
+      throw new Error(
+        data.error ?? `The agent gateway returned status ${res.status}`,
+      );
     }
 
     const data = await res.json();
