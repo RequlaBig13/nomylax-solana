@@ -1,0 +1,45 @@
+{
+  "name": "nomylax-solana",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Nomylax - financial firewall for autonomous AI agents on Solana",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run verify:hygiene && npm run typecheck && npm run lint && npm run test && npm run build",
+    "verify:hygiene": "node scripts/verify-hygiene.mjs"
+  },
+  "dependencies": {
+    "@solana/kit": "8.3.0",
+    "@solana/kit-plugin-rpc": "0.19.0",
+    "@solana/kit-plugin-wallet": "0.20.0",
+    "@solana/react": "8.3.0",
+    "@solana-program/system": "0.14.1",
+    "next": "16.3.8",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "4.6.5",
+    "@solana-program/memo": "0.15.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "eslint": "^9.39.5",
+    "tailwindcss": "^4.0.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": ">=20.18.0"
+  }
+}

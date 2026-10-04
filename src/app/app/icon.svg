@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Outer Gold Ring -->
+  <circle cx="50" cy="50" r="36" stroke="#EAB308" stroke-width="3" />
+  
+  <!-- Center Solid Node (Flat top, rounded bottom) -->
+  <path d="M 38 42 H 62 V 52 A 12 12 0 0 1 38 52 Z" fill="#EAB308" />
+  
+  <!-- Top Line (Breaking out of the ring) -->
+  <line x1="50" y1="6" x2="50" y2="36" stroke="#EAB308" stroke-width="4" stroke-linecap="round" />
+  
+  <!-- Bottom Dot -->
+  <circle cx="50" cy="72" r="3" fill="#EAB308" />
+</svg>

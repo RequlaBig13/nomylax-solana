@@ -1,0 +1,21 @@
+[toolchain]
+anchor_version = "1.2.0"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.devnet]
+nomylax_guard = "FaSSQbpxHB8Ytzqv4nXR5ZocLkiM6RZH8xJ5sqfsNSx6"
+
+[programs.localnet]
+nomylax_guard = "ijTdf4Q6pqaitjN1ZpnW9ZJNGNEeWTfBgydcWpkBJA8"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "cargo test"
+
+[hooks]

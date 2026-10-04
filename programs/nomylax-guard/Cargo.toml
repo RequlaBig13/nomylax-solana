@@ -1,0 +1,18 @@
+[package]
+name = "nomylax-guard"
+version = "0.1.0"
+description = "Hard SOL spending boundaries for autonomous agents"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "nomylax_guard"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+anchor-lang = "1.2.0"
