@@ -4,6 +4,9 @@ import { z } from 'zod';
 import { getRepository } from '@/server/repo';
 import { nextVersion } from '@/server/repo/constitution';
 import { assertSafeUrl, UnsafeUrlError } from '@/server/security/url-guard';
+import { connectorInputSchema } from '@/server/connectors/schema';
+import { encryptConnectorSecret } from '@/server/connectors/crypto';
+import { endpointAllowlist, publicConnector } from '@/server/connectors/gateway';
 import { constitutionSchema, defaultConstitution, normaliseConstitution, publicAgent } from '@/server/agents';
 import { rollCounters } from '@/lib/spend';
 import { fail, guard, parse, requireSession, serverError } from '@/server/api';
@@ -33,7 +36,8 @@ const createSchema = z.object({
    * here. Two definitions of "acceptable endpoint" drift apart, and the one
    * that matters is the one the outbound request is checked against.
    */
-  endpoint: z.string().min(1).max(300).optional(),
+  endpoint: z.string().min(1).max(500).optional(),
+  connector: connectorInputSchema.optional(),
   constitution: constitutionSchema.optional(),
 });
 
@@ -87,7 +91,7 @@ export async function POST(req: Request) {
     if (body.endpoint) {
       try {
         assertSafeUrl(body.endpoint, {
-          allowlist: process.env.AGENT_ENDPOINT_ALLOWLIST?.split(',').filter(Boolean),
+          allowlist: endpointAllowlist(),
         });
       } catch (e) {
         if (e instanceof UnsafeUrlError) return fail(400, `Endpoint was refused: ${e.reason}`);
@@ -106,6 +110,14 @@ export async function POST(req: Request) {
     const version = nextVersion(id, null, constitution, session.address, now);
     await repo.appendConstitutionVersion(version);
 
+    const connector = body.endpoint ? publicConnector(body.connector ?? {
+      method: 'POST', sendContext: true, responseMode: 'native', defaultToken: 'SOL',
+      auth: { type: 'env-bearer', secretRef: 'AGENT_API_KEY' },
+    }) : undefined;
+    const credentialCiphertext = body.connector?.credential
+      ? encryptConnectorSecret(body.connector.credential)
+      : undefined;
+
     const agent = {
       id,
       workspaceId: workspace.id,
@@ -120,6 +132,8 @@ export async function POST(req: Request) {
       failedCount: 0,
       riskScore: 0,
       endpoint: body.endpoint,
+      connector,
+      credentialCiphertext,
       enabled: true,
       constitutionVersion: version.version,
       createdAt: now,
@@ -140,6 +154,7 @@ export async function POST(req: Request) {
         constitutionVersion: version.version,
         constitutionHash: version.hash,
         policySource: body.constitution ? 'owner-supplied' : 'restrictive-default',
+        connector: connector ? { method: connector.method, responseMode: connector.responseMode, authType: connector.auth.type } : 'demo',
       },
     });
 

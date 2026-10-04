@@ -98,7 +98,7 @@ export const agentIdSchema = z.string().regex(/^[a-zA-Z0-9_-]{3,64}$/, 'must be 
  *
  * Built as an allowlist rather than by deleting fields from the stored record.
  * A deny list silently starts leaking the moment someone adds a column, and the
- * columns most likely to be added here are credentials: apiKeyHash and endpoint
+ * columns most likely to be added here are credentials: credentialCiphertext and endpoint
  * are both on StoredAgent already. The endpoint is reduced to a boolean because
  * the owner needs to know whether one is registered, not what it is.
  */

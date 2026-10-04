@@ -233,11 +233,31 @@ ANTHROPIC_API_KEY=
 ANTHROPIC_MODEL=
 
 AGENT_API_KEY=
-AGENT_ENDPOINT_ALLOWLIST=
+# Use * to allow any public HTTPS host through the SSRF guard, or comma-separated hosts to restrict it.
+AGENT_ENDPOINT_ALLOWLIST=*
 DATABASE_URL=
 ```
 
 Use a dedicated RPC provider for a public demo if the shared Devnet endpoint becomes rate limited.
+
+### Universal Agent Gateway
+
+Nomylax is agent-agnostic. A connected agent can use the native Nomylax intent contract or any public HTTPS JSON API that can be normalized into an economic intent.
+
+Supported connector options:
+
+- `GET` or `POST`
+- no authentication
+- Bearer token from an approved server environment reference
+- API-key/custom header from an approved server environment reference
+- encrypted per-agent Bearer/API-key credential
+- native `{ intents: [...] }` responses
+- automatic JSON normalization for common action/payment/transaction shapes
+- explicit dotted-path field mapping for unusual APIs
+
+All outbound URLs still pass the SSRF guard. Private/reserved addresses, localhost, metadata services, embedded URL credentials and non-HTTPS production endpoints are refused. Normalization only interprets the upstream payload; the final `ALLOW / REVIEW / BLOCK` decision remains deterministic and is produced by the Financial Constitution and risk engine.
+
+See [Universal Agent Gateway](./docs/UNIVERSAL_AGENT_GATEWAY.md).
 
 ---
 
@@ -337,8 +357,8 @@ That separation is the product.
 This repository does not hide unfinished work behind marketing language.
 
 - Live MVP settlement is SOL-first on Devnet.
-- The included Anchor Guard program must be deployed and integrated before its program ID can be presented as live evidence.
-- The downloadable front-end workspace is local-first. The server repository abstraction exists, but production Postgres still needs deployment wiring and integration testing.
+- Only a Guard Program ID that has actually been deployed and verified on Devnet should be presented as live evidence.
+- Browser state remains available for fast UX, while authenticated workspaces, agents, constitutions, decisions and audit events are persisted through the Postgres repository when `DATABASE_URL` is configured.
 - Shared, multi-instance rate limiting is not yet wired.
 - No independent security audit is claimed.
 - Mainnet deployment is intentionally not required for the contest MVP.

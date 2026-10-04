@@ -10,6 +10,7 @@ import { ConstitutionBuilder } from '@/components/onboarding/ConstitutionBuilder
 import { HelmetMark } from '@/components/ui/Mark';
 import { solAmount, shortAddr } from '@/lib/format';
 import type { AgentType, Constitution, RiskProfile, ShadowReport, Treasury } from '@/lib/types';
+import type { AgentConnectorConfig, ConnectorAuthType, ConnectorInput, ConnectorResponseMode } from '@/lib/connectors';
 
 const STEPS = ['Connect', 'Workspace', 'Agent', 'Configure', 'Constitution', 'Shadow', 'Activate'];
 
@@ -48,7 +49,52 @@ export default function Onboarding() {
   const [agentType, setAgentType] = useState<Exclude<AgentType, 'custom'>>('research');
   const [agentName, setAgentName] = useState('Research Scout');
   const [endpoint, setEndpoint] = useState('');
+  const [connectorMethod, setConnectorMethod] = useState<'GET' | 'POST'>('POST');
+  const [responseMode, setResponseMode] = useState<ConnectorResponseMode>('auto');
+  const [authType, setAuthType] = useState<ConnectorAuthType>('env-bearer');
   const [authRef, setAuthRef] = useState('AGENT_API_KEY');
+  const [credential, setCredential] = useState('');
+  const [headerName, setHeaderName] = useState('x-api-key');
+  const [sendContext, setSendContext] = useState(true);
+  const [rootPath, setRootPath] = useState('');
+  const [amountPath, setAmountPath] = useState('amount');
+  const [tokenPath, setTokenPath] = useState('token');
+  const [recipientPath, setRecipientPath] = useState('recipient');
+  const [purposePath, setPurposePath] = useState('purpose');
+  const [verifiedPath, setVerifiedPath] = useState('recipientVerified');
+  const [riskPath, setRiskPath] = useState('contractRisk');
+
+  const connectorInput = useMemo<ConnectorInput>(() => {
+    const auth = authType === 'none'
+      ? { type: 'none' as const }
+      : authType === 'env-bearer'
+        ? { type: 'env-bearer' as const, secretRef: authRef.trim() || 'AGENT_API_KEY' }
+        : authType === 'env-header'
+          ? { type: 'env-header' as const, secretRef: authRef.trim(), headerName: headerName.trim() || 'x-api-key' }
+          : authType === 'bearer'
+            ? { type: 'bearer' as const }
+            : { type: 'header' as const, headerName: headerName.trim() || 'x-api-key' };
+    return {
+      method: connectorMethod,
+      sendContext,
+      responseMode,
+      rootPath: rootPath.trim() || undefined,
+      mapping: responseMode === 'mapping' ? {
+        amount: amountPath.trim(), token: tokenPath.trim() || undefined,
+        recipient: recipientPath.trim(), purpose: purposePath.trim(),
+        recipientVerified: verifiedPath.trim() || undefined,
+        contractRisk: riskPath.trim() || undefined,
+      } : undefined,
+      defaultToken: 'SOL',
+      auth,
+      ...((authType === 'bearer' || authType === 'header') ? { credential } : {}),
+    };
+  }, [authType, authRef, headerName, connectorMethod, sendContext, responseMode, rootPath, amountPath, tokenPath, recipientPath, purposePath, verifiedPath, riskPath, credential]);
+
+  const connectorPublic = useMemo<AgentConnectorConfig>(() => {
+    const { credential: _credential, ...publicConfig } = connectorInput;
+    return publicConfig;
+  }, [connectorInput]);
 
   const [constitution, setConstitution] = useState<Constitution>({
     ...PROFILE_TEMPLATES.conservative,
@@ -67,10 +113,18 @@ export default function Onboarding() {
     // for a reason that has nothing to do with the constitution they wrote.
     if (step === 1) return wsName.trim().length > 1 && declared.total > 0;
     if (step === 2) return source !== null;
-    if (step === 3) return agentName.trim().length > 1 && (source === 'demo' || endpoint.trim().length > 4);
+    if (step === 3) {
+      if (agentName.trim().length <= 1) return false;
+      if (source === 'demo') return true;
+      if (endpoint.trim().length <= 4) return false;
+      if ((authType === 'env-bearer' || authType === 'env-header') && !authRef.trim()) return false;
+      if ((authType === 'bearer' || authType === 'header') && !credential.trim()) return false;
+      if (responseMode === 'mapping' && (!amountPath.trim() || !recipientPath.trim() || !purposePath.trim())) return false;
+      return true;
+    }
     if (step === 5) return !!report;
     return true;
-  }, [step, owner, wallet.isAuthenticated, wsName, declared.total, source, agentName, endpoint, report]);
+  }, [step, owner, wallet.isAuthenticated, wsName, declared.total, source, agentName, endpoint, report, authType, authRef, credential, responseMode, amountPath, recipientPath, purposePath]);
 
   const applyProfile = (p: RiskProfile) => {
     setProfile(p);
@@ -92,7 +146,10 @@ export default function Onboarding() {
         failedCount: 0, riskScore: 0, createdAt: Date.now(),
         endpoint: source === 'existing' ? endpoint : undefined,
       };
-      const r = await runShadow(ghost, declared, { requests: 14 });
+      const r = await runShadow(ghost, declared, {
+        requests: 14,
+        previewConnector: source === 'existing' ? connectorInput : undefined,
+      });
       setReport(r);
     } catch (e: any) {
       setError(e?.message ?? 'Simulation could not complete.');
@@ -101,20 +158,54 @@ export default function Onboarding() {
     }
   };
 
-  const activate = () => {
-    createWorkspace({
-      name: wsName, treasuryLabel: wsLabel, riskProfile: profile,
-      network: wallet.chainName, owner: owner ?? null,
-    });
-    declareTreasury({ total: declared.total, reserve: declared.reserve });
-    const agent = addAgent({
-      name: agentName, type: agentType, mode: 'live', profile, constitution,
-      endpoint: source === 'existing' ? endpoint : undefined,
-    });
-    setMode(agent.id, 'live');
-    completeOnboarding();
-    router.push('/app/overview');
+  const [activating, setActivating] = useState(false);
+
+  const activate = async () => {
+    setActivating(true); setError(null);
+    try {
+      const wsRes = await fetch('/api/workspace', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: wsName, treasuryLabel: wsLabel, riskProfile: profile }),
+      });
+      if (!wsRes.ok) throw new Error((await wsRes.json().catch(() => ({}))).error ?? 'Workspace could not be saved');
+
+      const treasuryRes = await fetch('/api/workspace', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: wsName, treasuryLabel: wsLabel, riskProfile: profile, total: declared.total, reserve: declared.reserve }),
+      });
+      if (!treasuryRes.ok) throw new Error((await treasuryRes.json().catch(() => ({}))).error ?? 'Treasury envelope could not be saved');
+
+      const agentRes = await fetch('/api/agents', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: agentName, type: agentType, mode: 'live', constitution,
+          ...(source === 'existing' ? { endpoint, connector: connectorInput } : {}),
+        }),
+      });
+      const agentBody = await agentRes.json().catch(() => ({}));
+      if (!agentRes.ok) throw new Error(agentBody.error ?? 'Agent could not be saved');
+
+      createWorkspace({
+        name: wsName, treasuryLabel: wsLabel, riskProfile: profile,
+        network: wallet.chainName, owner: owner ?? null,
+      });
+      declareTreasury({ total: declared.total, reserve: declared.reserve });
+      const agent = addAgent({
+        id: agentBody.agent.id,
+        name: agentName, type: agentType, mode: 'live', profile, constitution,
+        endpoint: source === 'existing' ? endpoint : undefined,
+        connector: source === 'existing' ? connectorPublic : undefined,
+      });
+      setMode(agent.id, 'live');
+      completeOnboarding();
+      router.push('/app/overview');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Activation could not complete');
+    } finally {
+      setActivating(false);
+    }
   };
+
 
   if (!isMounted) {
     return (
@@ -247,20 +338,79 @@ export default function Onboarding() {
                 ))}
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 18, maxWidth: 760 }}>
-                <label className="field"><span style={{ fontSize: 13 }}>Agent type</span>
-                  <select className="select" value={agentType} onChange={(e) => setAgentType(e.target.value as any)}>
-                    {Object.keys(AGENT_TEMPLATES).map((t) => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </label>
-                <label className="field"><span style={{ fontSize: 13 }}>Endpoint</span>
-                  <input className="input" placeholder="https://your-agent.example.com/intents" value={endpoint} onChange={(e) => setEndpoint(e.target.value)} />
-                  <span className="hint">Must answer POST with {'{ intents: [...] }'}. See README for the contract.</span>
-                </label>
-                <label className="field"><span style={{ fontSize: 13 }}>Authentication reference</span>
-                  <input className="input num-input" value={authRef} onChange={(e) => setAuthRef(e.target.value)} />
-                  <span className="hint">The name of a server environment variable - not the secret itself.</span>
-                </label>
+              <div style={{ maxWidth: 920 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 18 }}>
+                  <label className="field"><span style={{ fontSize: 13 }}>Agent type</span>
+                    <select className="select" value={agentType} onChange={(e) => setAgentType(e.target.value as any)}>
+                      {Object.keys(AGENT_TEMPLATES).map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </label>
+                  <label className="field"><span style={{ fontSize: 13 }}>HTTPS endpoint</span>
+                    <input className="input" placeholder="https://agent.example.com/actions" value={endpoint} onChange={(e) => setEndpoint(e.target.value)} />
+                    <span className="hint">Any public HTTPS JSON endpoint. Private networks and metadata hosts are refused.</span>
+                  </label>
+                  <label className="field"><span style={{ fontSize: 13 }}>Request method</span>
+                    <select className="select" value={connectorMethod} onChange={(e) => setConnectorMethod(e.target.value as 'GET' | 'POST')}>
+                      <option value="POST">POST</option><option value="GET">GET</option>
+                    </select>
+                  </label>
+                  <label className="field"><span style={{ fontSize: 13 }}>Response adapter</span>
+                    <select className="select" value={responseMode} onChange={(e) => setResponseMode(e.target.value as ConnectorResponseMode)}>
+                      <option value="auto">Auto JSON normalization</option>
+                      <option value="native">Nomylax native intents</option>
+                      <option value="mapping">Custom JSON mapping</option>
+                    </select>
+                  </label>
+                  <label className="field"><span style={{ fontSize: 13 }}>Authentication</span>
+                    <select className="select" value={authType} onChange={(e) => setAuthType(e.target.value as ConnectorAuthType)}>
+                      <option value="none">None</option>
+                      <option value="env-bearer">Bearer · server env reference</option>
+                      <option value="env-header">API key header · server env reference</option>
+                      <option value="bearer">Bearer · save encrypted credential</option>
+                      <option value="header">API key header · save encrypted credential</option>
+                    </select>
+                  </label>
+                  {(authType === 'env-bearer' || authType === 'env-header') ? (
+                    <label className="field"><span style={{ fontSize: 13 }}>Server secret reference</span>
+                      <input className="input num-input" value={authRef} onChange={(e) => setAuthRef(e.target.value.toUpperCase())} />
+                      <span className="hint">Must start with AGENT_ or NOMYLAX_AGENT_. The secret value never enters browser state.</span>
+                    </label>
+                  ) : null}
+                  {(authType === 'bearer' || authType === 'header') ? (
+                    <label className="field"><span style={{ fontSize: 13 }}>API credential</span>
+                      <input className="input" type="password" autoComplete="off" value={credential} onChange={(e) => setCredential(e.target.value)} />
+                      <span className="hint">Sent once over HTTPS and encrypted server-side with the session secret. It is never returned by the API.</span>
+                    </label>
+                  ) : null}
+                  {(authType === 'env-header' || authType === 'header') ? (
+                    <label className="field"><span style={{ fontSize: 13 }}>API key header name</span>
+                      <input className="input" placeholder="x-api-key" value={headerName} onChange={(e) => setHeaderName(e.target.value)} />
+                    </label>
+                  ) : null}
+                  <label className="field"><span style={{ fontSize: 13 }}>Intent collection path (optional)</span>
+                    <input className="input" placeholder="payload.actions" value={rootPath} onChange={(e) => setRootPath(e.target.value)} />
+                    <span className="hint">Leave blank in Auto mode. Use a dotted path when your API nests the action list.</span>
+                  </label>
+                  <label className="field"><span style={{ fontSize: 13 }}>Request context</span>
+                    <select className="select" value={sendContext ? 'yes' : 'no'} onChange={(e) => setSendContext(e.target.value === 'yes')}>
+                      <option value="yes">Send agentId + count</option><option value="no">Send no Nomylax context</option>
+                    </select>
+                  </label>
+                </div>
+
+                {responseMode === 'mapping' ? (
+                  <div className="card" style={{ padding: 18, marginTop: 18 }}>
+                    <div className="label" style={{ marginBottom: 14 }}>Custom response mapping</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 12 }}>
+                      <label className="field"><span>Amount path</span><input className="input" value={amountPath} onChange={(e) => setAmountPath(e.target.value)} /></label>
+                      <label className="field"><span>Token path</span><input className="input" value={tokenPath} onChange={(e) => setTokenPath(e.target.value)} /></label>
+                      <label className="field"><span>Recipient path</span><input className="input" value={recipientPath} onChange={(e) => setRecipientPath(e.target.value)} /></label>
+                      <label className="field"><span>Purpose path</span><input className="input" value={purposePath} onChange={(e) => setPurposePath(e.target.value)} /></label>
+                      <label className="field"><span>Verified path</span><input className="input" value={verifiedPath} onChange={(e) => setVerifiedPath(e.target.value)} /></label>
+                      <label className="field"><span>Risk path</span><input className="input" value={riskPath} onChange={(e) => setRiskPath(e.target.value)} /></label>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             )}
 
@@ -328,9 +478,10 @@ export default function Onboarding() {
               </div>
             ) : null}
 
-            <button className="btn btn-primary" style={{ marginTop: 26, padding: '14px 26px' }} onClick={activate}>
-              Enable protected autonomous mode
+            <button className="btn btn-primary" style={{ marginTop: 26, padding: '14px 26px' }} onClick={activate} disabled={activating}>
+              {activating ? 'Saving protected agent…' : 'Enable protected autonomous mode'}
             </button>
+            {error ? <p style={{ color: '#FF5C6C', fontSize: 12.5, marginTop: 14 }}>{error}</p> : null}
           </Step>
         ) : null}
       </div>

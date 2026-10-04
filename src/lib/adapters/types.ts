@@ -1,4 +1,5 @@
 import type { AgentType, IntentRequest } from '../types';
+import type { AgentConnectorConfig, ConnectorInput } from '../connectors';
 
 /**
  * Adapter boundary. The UI never talks to an agent directly - it asks an
@@ -14,7 +15,7 @@ export interface AgentAdapter {
 export interface AdapterConfig {
   kind: 'demo' | 'http';
   type: AgentType;
-  /** HTTP adapters only. Secrets are resolved server-side, never passed here. */
+  /** HTTP adapters only. Secrets are resolved server-side. */
   endpoint?: string;
-  authRef?: string;
+  connector?: AgentConnectorConfig | ConnectorInput;
 }

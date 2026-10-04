@@ -8,6 +8,7 @@ import { uid } from './format';
 import type {
   Agent, AgentMode, Constitution, Decision, IntentRequest, RiskProfile, Treasury, Workspace,
 } from './types';
+import type { AgentConnectorConfig } from './connectors';
 
 const KEY = 'nomylax.workspace.v1';
 
@@ -49,8 +50,8 @@ interface Ctx extends State {
   /** Owner-declared budget envelope. Not a balance read from chain. */
   declareTreasury: (d: { total: number; reserve: number }) => void;
   addAgent: (a: {
-    name: string; type: Agent['type']; mode?: AgentMode; endpoint?: string;
-    constitution?: Partial<Constitution>; profile?: RiskProfile;
+    id?: string; name: string; type: Agent['type']; mode?: AgentMode; endpoint?: string;
+    connector?: AgentConnectorConfig; constitution?: Partial<Constitution>; profile?: RiskProfile;
   }) => Agent;
   updateConstitution: (agentId: string, patch: Partial<Constitution>) => void;
   setMode: (agentId: string, mode: AgentMode) => void;
@@ -120,9 +121,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
   const addAgent: Ctx['addAgent'] = useCallback((a) => {
     const profile = a.profile ?? 'balanced';
-    const agent = seedAgent(uid('agt'), a.name, a.type, {
+    const agent = seedAgent(a.id ?? uid('agt'), a.name, a.type, {
       mode: a.mode ?? 'shadow',
       endpoint: a.endpoint,
+      connector: a.connector,
       constitution: {
         ...PROFILE_TEMPLATES[profile],
         approvedRecipients: [...DEMO_RECIPIENTS],

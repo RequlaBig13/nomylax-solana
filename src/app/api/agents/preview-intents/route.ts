@@ -1,13 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { assertSafeUrl, UnsafeUrlError } from '@/server/security/url-guard';
-import {
-  fail,
-  guard,
-  parse,
-  requireSession,
-  serverError,
-} from '@/server/api';
+import { connectorInputSchema } from '@/server/connectors/schema';
+import { fail, guard, parse, requireSession, serverError } from '@/server/api';
+import { ConnectorError, fetchAgentIntents, publicConnector } from '@/server/connectors/gateway';
 
 export const runtime = 'nodejs';
 
@@ -15,6 +10,7 @@ const schema = z.object({
   agentId: z.literal('preview'),
   count: z.number().int().min(1).max(25).default(5),
   endpoint: z.string().url().max(500),
+  connector: connectorInputSchema.optional(),
 });
 
 export async function POST(req: Request) {
@@ -27,60 +23,30 @@ export async function POST(req: Request) {
   const parsed = await parse(req, schema);
   if (!parsed.ok) return parsed.response;
 
-  let url: URL;
+  const input = parsed.data.connector ?? {
+    method: 'POST' as const,
+    sendContext: true,
+    responseMode: 'native' as const,
+    defaultToken: 'SOL',
+    auth: { type: 'env-bearer' as const, secretRef: 'AGENT_API_KEY' },
+  };
 
   try {
-    url = assertSafeUrl(parsed.data.endpoint, {
-      allowlist: process.env.AGENT_ENDPOINT_ALLOWLIST
-        ?.split(',')
-        .map((value) => value.trim())
-        .filter(Boolean),
+    const connector = publicConnector(input)!;
+    const result = await fetchAgentIntents({
+      endpoint: parsed.data.endpoint,
+      connector,
+      previewCredential: input.credential,
+      agentId: parsed.data.agentId,
+      count: parsed.data.count,
     });
-  } catch (error) {
-    if (error instanceof UnsafeUrlError) {
-      return fail(400, `Endpoint was refused: ${error.reason}`);
-    }
-    throw error;
-  }
-
-  const apiKey = process.env.AGENT_API_KEY;
-  if (!apiKey) {
-    return fail(501, 'Agent gateway is not configured on this deployment');
-  }
-
-  try {
-    const upstream = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-        'User-Agent': 'Nomylax/1.0',
-      },
-      body: JSON.stringify({
-        agentId: parsed.data.agentId,
-        count: parsed.data.count,
-      }),
-      cache: 'no-store',
-      redirect: 'error',
-      signal: AbortSignal.timeout(10_000),
-    });
-
-    if (!upstream.ok) {
-      return fail(502, `Agent returned status ${upstream.status}`);
-    }
-
-    const data = await upstream.json().catch(() => null);
 
     return NextResponse.json({
-      intents: Array.isArray((data as any)?.intents)
-        ? (data as any).intents
-        : [],
+      intents: result.intents,
+      normalization: { sourceCount: result.sourceCount, rejected: result.rejected },
     });
-  } catch (error: any) {
-    if (error?.name === 'TimeoutError') {
-      return fail(502, 'Agent did not respond in time');
-    }
-
+  } catch (error) {
+    if (error instanceof ConnectorError) return fail(error.status, error.message);
     return serverError(error, 'External agent could not be reached');
   }
 }

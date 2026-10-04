@@ -1,6 +1,7 @@
 import { evaluate } from './policy-engine';
 import { createAdapter } from './adapters';
 import type { Agent, Decision, ShadowReport, Treasury } from './types';
+import type { ConnectorInput } from './connectors';
 
 /**
  * Runs the agent against real policy with simulated settlement. Spend is
@@ -10,12 +11,17 @@ import type { Agent, Decision, ShadowReport, Treasury } from './types';
 export async function runShadow(
   agent: Agent,
   treasury: Treasury,
-  opts: { requests?: number; hours?: number } = {},
+  opts: { requests?: number; hours?: number; previewConnector?: ConnectorInput } = {},
 ): Promise<ShadowReport> {
   const requests = opts.requests ?? 14;
   const hours = opts.hours ?? 24;
 
-  const adapter = createAdapter({ kind: agent.endpoint ? 'http' : 'demo', type: agent.type, endpoint: agent.endpoint });
+  const adapter = createAdapter({
+    kind: agent.endpoint ? 'http' : 'demo',
+    type: agent.type,
+    endpoint: agent.endpoint,
+    connector: opts.previewConnector ?? agent.connector,
+  });
   const drafts = await adapter.nextIntents(agent.id, requests);
 
   const ghost: Agent = { ...agent, spentToday: 0, spentMonth: 0, failedCount: 0 };

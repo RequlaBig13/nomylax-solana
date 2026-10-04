@@ -23,6 +23,8 @@ Nomylax inserts a programmable control boundary between an agent's intent and a 
 
 Owners can first run an agent in Shadow Lab to see what it would have attempted without moving funds. When live mode is enabled, an approved action still requires real Solana settlement. Safe Mode can stop further activity when repeated failures or elevated risk cross the owner's boundary.
 
+Nomylax is agent-agnostic. Its Universal Agent Gateway can connect public HTTPS agent/API endpoints using GET or POST, resolve authentication server-side, and normalize native or third-party JSON response shapes into one canonical financial intent before the same deterministic policy engine runs. A separate reference agent exposes both a native endpoint and a deliberately different nested JSON endpoint so judges can verify that the control plane is not hardcoded to one agent format.
+
 ## Solana integration
 
 Nomylax uses Solana as the settlement and verification layer of the MVP.
@@ -53,14 +55,15 @@ Solana is not used as a decorative wallet connection. It is where an approved au
 
 1. Open the landing page and explain the problem in one sentence.
 2. Connect the Solana wallet and sign the ownership challenge.
-3. Show an agent's Financial Constitution.
-4. Run Shadow Lab and point out an action that Nomylax would block.
-5. Switch to live mode and submit a compliant intent.
-6. Sign the Solana transaction in the wallet.
-7. Open the returned signature in Solana Explorer.
-8. Submit a deliberate request above the max-transaction boundary.
-9. Show the failed deterministic check and the value Nomylax protected.
-10. Show Transactions / Audit and finish with the product direction: bounded economic authority for autonomous software.
+3. Connect the external Research Scout and show the Universal Agent Gateway configuration.
+4. Run Shadow Lab against the native endpoint, then switch to the generic nested JSON endpoint to show automatic normalization.
+5. Show the agent's Financial Constitution and point out an action that Nomylax blocks.
+6. Switch to live mode and submit a compliant intent.
+7. Sign the Solana transaction in the wallet.
+8. Open the returned signature in Solana Explorer.
+9. Submit a deliberate request above the max-transaction boundary.
+10. Show the failed deterministic check and the value Nomylax protected.
+11. Show Transactions / Audit and finish with the product direction: bounded economic authority for autonomous software.
 
 ## One-sentence closing
 

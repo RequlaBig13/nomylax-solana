@@ -57,6 +57,18 @@ Example intent:
 
 `POST /api/shadow` evaluates behavior without settlement.
 
-## Agents
+## Agents and Universal Agent Gateway
 
-`POST /api/agents/intents` fetches economic intents from a registered adapter. Remote endpoints remain subject to SSRF restrictions.
+`POST /api/agents` registers an agent and, for external agents, stores its connector configuration. User-supplied Bearer/API-key credentials are encrypted server-side and are never returned by the API.
+
+`POST /api/agents/preview-intents` securely tests an endpoint during onboarding before the agent is persisted.
+
+`POST /api/agents/intents` fetches intents for a persisted external agent. The route loads the endpoint and connector configuration from authoritative storage, resolves authentication server-side, applies the SSRF guard, fetches JSON, and normalizes the response into the canonical Nomylax intent shape.
+
+Connector response modes:
+
+- `native` - expects a Nomylax intent array
+- `auto` - discovers common `intents`, `actions`, `payments`, `transactions`, `requests`, `results` or nested payload arrays and common field aliases
+- `mapping` - uses explicit dotted paths for amount, token, recipient, purpose, verification and risk
+
+A connector may use GET or POST and may be unauthenticated, use an approved environment-secret reference, or store an encrypted per-agent credential. Remote endpoints remain subject to HTTPS/SSRF restrictions.

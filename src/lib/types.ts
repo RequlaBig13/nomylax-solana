@@ -3,6 +3,8 @@
 // Owner -> Workspace -> Agent -> Financial Constitution -> Decision
 // ---------------------------------------------------------------
 
+import type { AgentConnectorConfig } from './connectors';
+
 export type RiskProfile = 'conservative' | 'balanced' | 'autonomous';
 export type AgentMode = 'live' | 'shadow' | 'paused';
 export type AgentState = 'autonomous' | 'watch' | 'safe';
@@ -48,6 +50,8 @@ export interface Agent {
   riskScore: number;
   /** Present only for agents connected over HTTP. Never contains secrets. */
   endpoint?: string;
+  /** Public connector configuration. Credentials are never stored here. */
+  connector?: AgentConnectorConfig;
   createdAt: number;
 }
 

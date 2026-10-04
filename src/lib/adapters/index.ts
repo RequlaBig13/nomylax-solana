@@ -3,10 +3,7 @@ import { HttpAgentAdapter } from './http-agent';
 import type { AdapterConfig, AgentAdapter } from './types';
 
 export function createAdapter(cfg: AdapterConfig): AgentAdapter {
-  if (cfg.kind === 'http') {
-    return new HttpAgentAdapter(cfg.endpoint);
-  }
-
+  if (cfg.kind === 'http') return new HttpAgentAdapter(cfg.endpoint, cfg.connector);
   return new DemoAgentAdapter(cfg.type);
 }
 

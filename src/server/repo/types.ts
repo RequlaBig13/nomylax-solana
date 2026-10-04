@@ -13,8 +13,8 @@ export interface StoredAgent extends Agent {
   ownerAddress: string;
   /** Approved outbound endpoint. Never accepted from a request body. */
   endpoint?: string;
-  /** Hash of the shared secret an agent presents when calling the API. */
-  apiKeyHash?: string;
+  /** Encrypted connector credential for user-supplied Bearer/API-key auth. Never returned to clients. */
+  credentialCiphertext?: string;
   enabled: boolean;
   constitutionVersion: number;
 }

@@ -233,11 +233,11 @@ describe('agent creation', () => {
 
   it('never returns the owner address, workspace id, endpoint or key hash', async () => {
     const { agentId } = await setup(OWNER, { endpoint: 'https://agent.example.com/intents' });
-    await repo.saveAgent({ ...(await repo.getAgent(agentId))!, apiKeyHash: 'sha256:secret-material' });
+    await repo.saveAgent({ ...(await repo.getAgent(agentId))!, credentialCiphertext: 'v1.redacted-encrypted-material' });
 
     const serialised = JSON.stringify(await (await agentsGet(req('/api/agents', 'GET', OWNER))).json());
     expect(serialised).not.toContain('secret-material');
-    expect(serialised).not.toContain('apiKeyHash');
+    expect(serialised).not.toContain('credentialCiphertext');
     expect(serialised).not.toContain('ownerAddress');
     expect(serialised).not.toContain('agent.example.com');
     expect(serialised).toContain('"hasEndpoint":true');
